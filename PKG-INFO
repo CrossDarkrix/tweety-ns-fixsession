@@ -1,3 +1,29 @@
+Metadata-Version: 2.1
+Name: tweety-ns
+Version: 1.1.9
+Summary: An easy Twitter Scraper
+Home-page: https://github.com/mahrtayyab/tweety
+Author: Tayyab Kharl
+Author-email: tayyabmahr@gmail.com
+License: MIT
+Project-URL: Bug Tracker, https://github.com/mahrtayyab/tweety/issues
+Project-URL: Documentation, https://github.com/mahrtayyab/tweety
+Keywords: TWITTER,TWITTER SCRAPE,SCRAPE TWEETS
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Build Tools
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3
+Requires-Python: >=3.6
+Description-Content-Type: text/markdown
+Requires-Dist: beautifulsoup4
+Requires-Dist: openpyxl
+Requires-Dist: httpx
+Requires-Dist: dateutils
+Requires-Dist: anticaptchaofficial
+Requires-Dist: capsolver
+Requires-Dist: 2captcha-python
+
 # tweety
 Reverse Engineered Twitter Frontend API.
 
