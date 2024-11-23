@@ -1,15 +1,19 @@
 import json
 import os.path
-
+from .utils import dict_to_string
 
 class Session:
     def __init__(self, client):
         self._client = client
         self.user = None
         self.logged_in = False
-        self.cookies = ""
+        self.cookies = {}
 
     def cookies_dict(self):
+
+        if isinstance(self.cookies, dict):
+            return self.cookies
+
         result = {}
         split = str(self.cookies).split(";")
         for i in split:
@@ -21,8 +25,19 @@ class Session:
 
         return result
 
+    async def save_session(self, cookies, user):
+        self.logged_in = True
+
+        if hasattr(cookies, "to_dict"):
+            cookies = cookies.to_dict()
+
+        self.cookies = cookies or self.cookies
+        self.user = user or self.user
+
     def __str__(self):
-        return self.cookies
+        if isinstance(self.cookies, dict):
+            return dict_to_string(self.cookies)
+        return str(self.cookies)
 
 
 class MemorySession(Session):
@@ -34,12 +49,14 @@ class MemorySession(Session):
         self._client = client
         return self
 
-    def set_session_user(self, user):
-        self.user = dict(user)
-
-    def save_session(self, cookies):
-        self.cookies = str(cookies)
+    async def save_session(self, cookies, user):
         self.logged_in = True
+
+        if hasattr(cookies, "to_dict"):
+            cookies = cookies.to_dict()
+
+        self.cookies = cookies or self.cookies
+        self.user = user or self.user
 
 
 class FileSession(Session):
@@ -55,6 +72,13 @@ class FileSession(Session):
         directory = os.path.join(os.getenv('HOME'), 'Documents')
         return os.path.abspath(os.path.join(directory, f"{_session}.tw_session"))
 
+    async def save_session(self, cookies, user):
+        await super().save_session(cookies, user)
+        session_data = {"cookies": self.cookies, "user": self.user}
+
+        with open(self.session_file_path, "w") as f:
+            json.dump(session_data, f, default=str)
+
     def _load_session(self):
         if os.path.exists(self.session_file_path):
             with open(self.session_file_path, "r") as f:
@@ -63,18 +87,4 @@ class FileSession(Session):
                 self.user = session_data.get('user', {})
 
             self.logged_in = True
-
-    def set_session_user(self, user):
-        self.user = dict(user)
-
-        with open(self.session_file_path, "w") as f:
-            session_data = dict(cookies=str(self.cookies), user=dict(user))
-            json.dump(session_data, f, indent=4, default=str)
-
-    def save_session(self, cookies):
-        self.cookies = str(cookies)
-        self.logged_in = True
-        with open(self.session_file_path, "w") as f:
-            session_data = dict(cookies=str(cookies))
-            json.dump(session_data, f, indent=4)
 
