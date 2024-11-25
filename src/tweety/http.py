@@ -264,13 +264,13 @@ class Request:
             if response.status_code not in range(200, 300):
                 response = await self._session.request(method="GET", url=self._builder.URL_HOME_PAGE, headers=headers)
 
-            home_page = bs4.BeautifulSoup(response.content, 'lxml')
+            home_page = bs4.BeautifulSoup(response.content, 'html5lib')
             migration_url = home_page.select_one("meta[http-equiv='refresh']")
             migration_redirection_url = re.search(MIGRATION_REGEX, str(migration_url)) or re.search(MIGRATION_REGEX, str(response.content))
 
             if migration_redirection_url:
                 response = await self._session.request(method="GET", url=migration_redirection_url.group(0), headers=headers)
-                home_page = bs4.BeautifulSoup(response.content, 'lxml')
+                home_page = bs4.BeautifulSoup(response.content, 'html5lib')
             migration_form = home_page.select_one("form[name='f']") or home_page.select_one(f"form[action='https://x.com/x/migrate']")
 
             if migration_form:
@@ -278,7 +278,7 @@ class Request:
                 method = migration_form.attrs.get("method", "POST")
                 request_payload = {input_field.get("name"): input_field.get("value") for input_field in migration_form.select("input")}
                 response = await self._session.request(method=method, url=url, data=request_payload, headers=headers)
-                home_page = bs4.BeautifulSoup(response.content, 'lxml')
+                home_page = bs4.BeautifulSoup(response.content, 'html5lib')
         except:
             pass
         return home_page
@@ -288,7 +288,9 @@ class Request:
         this_response = None
         headers = self._get_request_headers()
         try:
-            this_response = await self._session.request(**self._builder.get_guest_token(), headers=headers)
+            request_data = self._builder.get_guest_token()
+            request_data["headers"] = headers
+            this_response = await self._session.request(**request_data)
             this_response = this_response.json()
             token = this_response.get('guest_token')  # noqa
         except:
