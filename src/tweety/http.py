@@ -42,7 +42,7 @@ class Request:
                 'origin': 'https://x.com'
             },
             http2=True,
-            proxies=proxy,
+            proxy=proxy,
             timeout=timeout,
             follow_redirects=True,
             **kwargs
@@ -279,8 +279,8 @@ class Request:
                 request_payload = {input_field.get("name"): input_field.get("value") for input_field in migration_form.select("input")}
                 response = await self._session.request(method=method, url=url, data=request_payload, headers=headers)
                 home_page = bs4.BeautifulSoup(response.content, 'html5lib')
-        except:
-            pass
+        except Exception as twitter_home_error:
+            raise ValueError(f"Unable to get Twitter Home Page : {str(twitter_home_error)}")
         return home_page
 
     async def _get_guest_token(self):
@@ -314,17 +314,11 @@ class Request:
 
     async def verify_cookies(self):
         data = self._builder.get_self_user()
-        response = {}
-        for i in range(self._retries):
-            try:
-                response = await self.__get_response__(**data)
-                break
-            except:
-                await asyncio.sleep(0.5)
-
+        response = await self.__get_response__(**data)
         user = User(self._client, response)
+
         if user is None:
-            raise InvalidCredentials(None, None, None)
+                raise InvalidCredentials(None, None, response)
 
         self.username = user.username
         self.set_user(user)
@@ -488,6 +482,11 @@ class Request:
         response = await self.__get_response__(**request_data)
         return response
 
+    async def send_message_reaction(self, reaction_emoji, conversation_id, message_id):
+        request_data = self._builder.send_message_reaction( reaction_emoji, conversation_id, message_id)
+        response = await self.__get_response__(**request_data)
+        return response
+
     async def create_pool(self, pool):
         request_data = self._builder.create_pool(pool)
         response = await self.__get_response__(**request_data)
@@ -503,15 +502,15 @@ class Request:
         response = await self.__get_response__(**request_data)
         return response
 
-    async def create_tweet(self, text, files, filter_, reply_to, quote_tweet_url, pool, geo, batch_composed):
+    async def create_tweet(self, text, files, filter_, reply_to, quote_tweet_url, pool, geo, batch_composed, community_id, post_on_timeline):
         if pool:
             response = await self.create_pool(pool)
             pool = response.get('card_uri')
 
         if len(text) > 280:
-            request_data = self._builder.create_note_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo)
+            request_data = self._builder.create_note_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo, community_id, post_on_timeline)
         else:
-            request_data = self._builder.create_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo, batch_composed)
+            request_data = self._builder.create_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo, batch_composed, community_id, post_on_timeline)
         response = await self.__get_response__(**request_data)
         return response
 
@@ -756,6 +755,27 @@ class Request:
 
     async def delete_scheduled_tweet(self, tweet_id):
         request_data = self._builder.delete_scheduled_tweet(tweet_id)
+        response = await self.__get_response__(**request_data)
+        return response
+
+    async def create_grok_conversation(self):
+        request_data = self._builder.create_grok_conversation()
+        response = await self.__get_response__(**request_data)
+        return response
+
+    async def get_grok_conversation_by_id(self, conversation_id, cursor):
+        request_data = self._builder.get_grok_conversation_by_id(conversation_id, cursor)
+        request_data["headers"]["referer"] = f"https://x.com/i/grok?conversation={conversation_id}"
+        response = await self.__get_response__(**request_data)
+        return response
+
+    async def get_new_grok_response(self, conversation_id, responses):
+        request_data = self._builder.get_grok_new_response(conversation_id, responses)
+        response = await self.__get_response__(is_document = True, **request_data)
+        return response
+
+    async def get_suggested_users(self):
+        request_data = self._builder.get_suggested_users()
         response = await self.__get_response__(**request_data)
         return response
 

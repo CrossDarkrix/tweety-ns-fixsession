@@ -8,6 +8,8 @@ import string
 import subprocess
 import sys
 import uuid
+import warnings
+from io import BytesIO
 from dateutil import parser as date_parser
 from urllib.parse import urlparse, parse_qs
 from .exceptions import AuthenticationRequired
@@ -20,15 +22,17 @@ from typing import Union, List
 GUEST_TOKEN_REGEX = re.compile("gt=(.*?);")
 MIGRATION_REGEX = re.compile(r"""(http(?:s)?://(?:www\.)?(twitter|x){1}\.com(/x)?/migrate([/?])?tok=[a-zA-Z0-9%\-_]+)+""", re.VERBOSE)
 MIME_TYPES = {
-    "png": "image/png",
-    "jpg": "image/jpeg",
-    "jfif": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "gif": "image/gif",
-    "webp": "image/webp",
-    "mp4": "video/mp4",
-    "mov": "video/quicktime",
-    "m4v": "video/x-m4v"
+    "png": ("image/png", [b"\x89PNG\r\n\x1a\n"]),
+    "jpg": ("image/jpeg", [b"\xFF\xD8\xFF"]),
+    "jpeg": ("image/jpeg", [b"\xFF\xD8\xFF"]),
+    "jfif": ("image/jpeg", [b"\xFF\xD8\xFF\xE0", b"\xFF\xD8\xFF\xE1"]),
+    "gif": ("image/gif", [b"GIF87a", b"GIF89a"]),
+    "webp": ("image/webp", [b"RIFF"]),
+    "mp4": ("video/mp4", [b"\x00\x00\x00\x18ftypisom", b"\x00\x00\x00\x18ftypmp42",
+                          b"\x00\x00\x00\x18ftypisom", b"\x00\x00\x00\x18ftypMSNV",
+                          b"\x00\x00\x00\x18ftypmp41"]),
+    "mov": ("video/quicktime", [b"\x00\x00\x00\x14ftypqt"]),
+    "m4v": ("video/x-m4v", [b"\x00\x00\x00\x18ftypM4V", b"\x00\x00\x00\x20ftypM4V"])
 }
 
 WORKBOOK_HEADERS = ['Date', 'Author', 'id', 'text', 'is_retweet', 'is_reply', 'language', 'likes',
@@ -62,21 +66,49 @@ def DictRequestData(cls):
 
 
 def AuthRequired(cls):
-    def method_wrapper_decorator(func):
+    def method_async_wrapper_decorator(func):
         async def wrapper(self, *args, **kwargs):
             if self.me is None:
                 raise AuthenticationRequired(200, "GenericForbidden", None)
 
             return await func(self, *args, **kwargs)
+        return wrapper
 
+    def method_wrapper_decorator(func):
+        def wrapper(self, *args, **kwargs):
+            if self.me is None:
+                raise AuthenticationRequired(200, "GenericForbidden", None)
+
+            return func(self, *args, **kwargs)
         return wrapper
 
     if inspect.isclass(cls):
         for name, method in vars(cls).items():
             if name != "__init__" and callable(method):
-                setattr(cls, name, method_wrapper_decorator(method))
+                if "iter_" in name:
+                    setattr(cls, name, method_wrapper_decorator(method))
+                else:
+                    setattr(cls, name, method_async_wrapper_decorator(method))
         return cls
-    return method_wrapper_decorator(cls)
+
+    if "iter_" in cls.__name__:
+        return method_wrapper_decorator(cls)
+    return method_async_wrapper_decorator(cls)
+
+def mime_from_buffer(file_buffer_or_bytes):
+    try:
+        import magic
+        mime_detector = magic.Magic(mime=True)
+        return mime_detector.from_buffer(file_buffer_or_bytes)
+    except ImportError:
+        for file_type, (mime_type, this_file_headers) in MIME_TYPES.items():
+            for header in this_file_headers:
+                if file_buffer_or_bytes.startswith(header):
+                  return mime_type
+
+
+    return None
+
 
 
 def get_running_loop():
@@ -199,7 +231,6 @@ def custom_json(self, **kwargs):
 def create_request_id():
     return str(uuid.uuid1())
 
-
 def create_conversation_id(sender, receiver):
     sender = int(sender)
     receiver = int(receiver)
@@ -215,18 +246,27 @@ def create_query_id():
 
 
 def check_if_file_is_supported(file):
-    if not str(file).startswith("https://") and not os.path.exists(file):
+    if isinstance(file, str) and not str(file).startswith("https://") and not os.path.exists(file):
         raise ValueError("Path {} doesn't exists".format(file))
 
-    file = file.split("?")[0]
-    file_extension = file.split(".")[-1]
+    if isinstance(file, bytes):
+        file = file
+        file_mime = mime_from_buffer(file)
+    elif isinstance(file, BytesIO):
+        file = file.getvalue()
+        file_mime = mime_from_buffer(file)
+    elif str(file.__class__.__name__) == "Gif":
+        file_extension = "gif"
+        file_mime = MIME_TYPES.get(file_extension)
+    else:
+        file = file.split("?")[0]
+        file_extension = file.split(".")[-1]
+        file_mime = MIME_TYPES.get(file_extension)[0]
 
-    if file_extension not in list(MIME_TYPES.keys()):
-        raise ValueError("File Extension '{}' is not supported. Use any of {}".format(
-            file_extension, list(MIME_TYPES.keys())
-        ))
+    if file_mime not in [i[0] for i in list(MIME_TYPES.values())]:
+        raise ValueError("File Extension is not supported. Use any of {}".format(list(MIME_TYPES.keys())))
 
-    return MIME_TYPES[file_extension]
+    return file_mime
 
 
 def get_random_string(length):
@@ -238,9 +278,12 @@ def calculate_md5(file_path):
         return None
 
     md5_hash = hashlib.md5()
-    with open(file_path, "rb") as file:
-        for chunk in iter(lambda: file.read(4096), b""):
-            md5_hash.update(chunk)
+    if isinstance(file_path, bytes):
+        md5_hash.update(file_path)
+    else:
+        with open(file_path, "rb") as file:
+            for chunk in iter(lambda: file.read(4096), b""):
+                md5_hash.update(chunk)
     return md5_hash.hexdigest()
 
 
@@ -314,6 +357,9 @@ def create_pool(duration: int, *choices):
 def parse_time(time):
     if not time:
         return None
+
+    if isinstance(time, (datetime.datetime, datetime.date)):
+        return time
 
     if isinstance(time, float):
         time = int(time)
@@ -469,3 +515,6 @@ def encode_audio_message(input_filename, ffmpeg_path=None):
 
 def tweet_id_to_datetime(tweet_id: int):
     return datetime.datetime.fromtimestamp(((tweet_id >> 22) + 1288834974657) / 1000.0)
+
+def json_stringify(json_data):
+    return str(json.dumps(json_data, separators=(",", ":")))

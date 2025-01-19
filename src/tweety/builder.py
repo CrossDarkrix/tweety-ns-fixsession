@@ -13,7 +13,8 @@ class UrlBuilder:
     URL_API_INIT = "https://x.com/i/api/1.1/branch/init.json"
     URL_GET_USER_STATE = "https://api.x.com/help-center/forms/api/prod/user_state.json"
     URL_SELF_USER = "https://api.x.com/graphql/851wLy502Jw3dVkLYkyC2Q/ViewerUserQuery"
-    URL_USER_BY_SCREEN_NAME = "https://x.com/i/api/graphql/laYnJPCAcVo0o6pzcnlVxQ/UserByScreenName"
+    # URL_USER_BY_SCREEN_NAME = "https://x.com/i/api/graphql/laYnJPCAcVo0o6pzcnlVxQ/UserByScreenName"
+    URL_USER_BY_SCREEN_NAME = "https://api.x.com/graphql/QGIw94L0abhuohrr76cSbw/UserByScreenName"
     URL_USER_BY_USER_IDS = "https://x.com/i/api/graphql/lc85bOG5T3IIS4u485VtBg/UsersByRestIds"
     URL_USER_TWEETS = "https://x.com/i/api/graphql/Tg82Ez_kxVaJf7OPbUdbCg/UserTweets"
     URL_USER_MEDIAS = "https://x.com/i/api/graphql/HaouMjBviBKKTYZGV_9qtg/UserMedia"
@@ -45,6 +46,7 @@ class UrlBuilder:
     URL_AUSER_ADD_GROUP_MEMBER = "https://x.com/i/api/graphql/oBwyQ0_xVbAQ8FAyG0pCRA/AddParticipantsMutation"  # noqa
     URL_AUSER_REMOVE_GROUP_MEMBER = "https://api.x.com/1.1/dm/conversation/{}/remove_participants.json"  # noqa
     URL_AUSER_SEND_MESSAGE = "https://x.com/i/api/1.1/dm/new2.json"  # noqa
+    URL_AUSER_SEND_MESSAGE_REACTION = "https://x.com/i/api/graphql/VyDyV9pC2oZEj6g52hgnhA/useDMReactionMutationAddMutation"  # noqa
     URL_AUSER_CONVERSATION = "https://x.com/i/api/1.1/dm/conversation/{}.json"  # noqa
     URL_AUSER_CREATE_TWEET = "https://x.com/i/api/graphql/znq7jUAqRjmPj7IszLem5Q/CreateTweet"  # noqa
     URL_AUSER_CREATE_NOTE_TWEET = "https://x.com/i/api/graphql/3Wu3Na3lrBzHKWJylOmaSg/CreateNoteTweet"  # noqa
@@ -97,6 +99,10 @@ class UrlBuilder:
     URL_UnPIN_TWEET = "https://x.com/i/api/graphql/BhKei844ypCyLYCg0nwigw/UnpinTweet"  # noqa
     URL_GET_SCHEDULED_TWEETS = "https://x.com/i/api/graphql/ITtjAzvlZni2wWXwf295Qg/FetchScheduledTweets"
     URL_DELETE_SCHEDULED_TWEETS = "https://x.com/i/api/graphql/CTOVqej0JBXAZSwkp1US0g/DeleteScheduledTweet"
+    URL_CREATE_GROK_CONVERSATION = "https://x.com/i/api/graphql/6cmfJY3d7EPWuCSXWrkOFg/CreateGrokConversation"
+    URL_GROK_CONVERSATION_BY_ID = "https://x.com/i/api/graphql/MSTjAM_LGNJM6oU0N2CcHg/GrokConversationItemsByRestId"
+    URL_NEW_GROK_RESPONSE = "https://api.x.com/2/grok/add_response.json"
+    URL_SUGGESTED_USERS = "https://x.com/i/api/graphql/OzfGv4kkFvmAYD1Egj3OVQ/ConnectTabTimeline"
 
     def get_guest_token(self):
         return "POST", self.URL_GUEST_TOKEN
@@ -116,7 +122,8 @@ class UrlBuilder:
     def get_self_user(self):
         variables = {"includeTweetImpression": True, "include_profile_info": True,
                      "includeHasBirdwatchNotes": True, "includeEditPerspective": True,
-                     "includeEditControl": True, "include_legacy_extended_profile": True, "withSafetyModeUserFields": True}
+                     "includeEditControl": True, "include_legacy_extended_profile": True,
+                     "withSafetyModeUserFields": True}
         features = {"super_follow_badge_privacy_enabled": True, "graduated_access_invisible_treatment_enabled": True,
                     "subscriptions_verification_info_enabled": True, "super_follow_user_api_enabled": True,
                     "blue_business_profile_image_shape_enabled": True,
@@ -140,24 +147,21 @@ class UrlBuilder:
         return "GET", self.URL_SELF_USER, params
 
     def user_by_screen_name(self, username):
-        variables = {"screen_name": str(username), "withSafetyModeUserFields": True}
-        features = {
-            "hidden_profile_likes_enabled": True,
-            "hidden_profile_subscriptions_enabled": True,
-            "subscriptions_verification_info_is_identity_verified_enabled": True,
-            "rweb_tipjar_consumption_enabled": True,
-            "responsive_web_twitter_article_notes_tab_enabled": True,
-            "responsive_web_graphql_exclude_directive_enabled": True,
-            "verified_phone_label_enabled": True,
-            "subscriptions_verification_info_verified_since_enabled": True,
-            "highlights_tweets_tab_ui_enabled": True,
-            "creator_subscriptions_tweet_preview_api_enabled": True,
-            "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
-            "responsive_web_graphql_timeline_navigation_enabled": True,
-            "subscriptions_feature_can_gift_premium": True
-        }
-
-        params = {'variables': str(json.dumps(variables)), 'features': str(json.dumps(features))}
+        variables = {"screen_name": str(username)}
+        features = {"hidden_profile_subscriptions_enabled": True,
+                    "profile_label_improvements_pcf_label_in_post_enabled": True,
+                    "rweb_tipjar_consumption_enabled": True, "responsive_web_graphql_exclude_directive_enabled": True,
+                    "verified_phone_label_enabled": True,
+                    "subscriptions_verification_info_is_identity_verified_enabled": True,
+                    "subscriptions_verification_info_verified_since_enabled": True,
+                    "highlights_tweets_tab_ui_enabled": True, "responsive_web_twitter_article_notes_tab_enabled": True,
+                    "subscriptions_feature_can_gift_premium": True,
+                    "creator_subscriptions_tweet_preview_api_enabled": True,
+                    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": True,
+                    "responsive_web_graphql_timeline_navigation_enabled": True}
+        field_toggles = {"withAuxiliaryUserLabels": True}
+        params = {'variables': str(json.dumps(variables)), 'features': str(json.dumps(features)),
+                  'fieldToggles': str(json.dumps(field_toggles))}
 
         return "GET", self.URL_USER_BY_SCREEN_NAME, params
 
@@ -382,10 +386,9 @@ class UrlBuilder:
 
         if filter_:
             variables['product'] = filter_
-        params = {'variables': str(json.dumps(variables, separators=(',', ':'))),
-                  'features': str(json.dumps(features, separators=(',', ':')))}
+        params = {'variables': str(json.dumps(variables)), 'features': str(json.dumps(features))}
 
-        return "GET", self.URL_SEARCH, urlencode(params, safe="()%", quote_via=urllib.parse.quote)
+        return "GET", self.URL_SEARCH, urlencode(params, safe='"()%', quote_via=urllib.parse.quote_plus)
 
     def search_place(self, lat=None, long=None, search_term=None):
         params = {
@@ -936,6 +939,19 @@ class UrlBuilder:
 
         return "POST", self.URL_AUSER_SEND_MESSAGE, params, json_data
 
+    def send_message_reaction(self, reaction_emoji, conversation_id, message_id):
+        json_data = {
+            'variables': {
+                'conversationId': conversation_id,
+                'messageId': message_id,
+                'reactionTypes': ['Emoji'],
+                'emojiReactions': [reaction_emoji],
+            },
+            'queryId': utils.create_query_id(),
+        }
+
+        return "POST", self.URL_AUSER_SEND_MESSAGE_REACTION, None, json_data
+
     def create_pool(self, pool):
         params = {"card_data": pool}
 
@@ -961,7 +977,9 @@ class UrlBuilder:
             quote_tweet_url=None,
             pool=None,
             geo=None,
-            batch_compose=False
+            batch_compose=False,
+            community_id=None,
+            post_on_timeline=False
     ):
         media_entities = utils.create_media_entities(files)
         variables = {
@@ -1028,6 +1046,16 @@ class UrlBuilder:
         if geo:
             variables['geo'] = {"place_id": geo}
 
+        if community_id:
+            variables['semantic_annotation_ids'] = [{
+                'entity_id': community_id,
+                'group_id': '8',
+                'domain_id': '31'
+            }]
+
+            variables["broadcast"] = post_on_timeline
+            variables["disallowed_reply_options"] = None
+
         json_data = dict(
             variables=variables,
             features=features,
@@ -1046,6 +1074,8 @@ class UrlBuilder:
             quote_tweet_url=None,
             pool=None,
             geo=None,
+            community_id=None,
+            post_on_timeline=False
     ):
         media_entities = utils.create_media_entities(files)
         variables = {
@@ -1106,6 +1136,15 @@ class UrlBuilder:
 
         if geo:
             variables['geo'] = {"place_id": geo}
+
+        if community_id:
+            variables['semantic_annotation_ids'] = [{
+                'entity_id': community_id,
+                'group_id': '8',
+                'domain_id': '31'
+            }]
+
+            variables["broadcast"] = post_on_timeline
 
         json_data = dict(
             variables=variables,
@@ -1977,6 +2016,77 @@ class UrlBuilder:
         }
 
         return "POST", self.URL_DELETE_SCHEDULED_TWEETS, None, json_data
+
+    def create_grok_conversation(self):
+        json_data = {
+            'variables': {},
+            'queryId': utils.create_query_id(),
+        }
+
+        return "POST", self.URL_CREATE_GROK_CONVERSATION, None, json_data
+
+    def get_grok_conversation_by_id(self, conversation_id, cursor=None):
+        variables = {"restId": conversation_id}
+        features = {"creator_subscriptions_tweet_preview_api_enabled": True, "premium_content_api_read_enabled": True,
+                    "communities_web_enable_tweet_community_results_fetch": True,
+                    "c9s_tweet_anatomy_moderator_badge_enabled": True,
+                    "responsive_web_grok_analyze_button_fetch_trends_enabled": True,
+                    "responsive_web_grok_analyze_post_followups_enabled": True, "articles_preview_enabled": True,
+                    "responsive_web_edit_tweet_api_enabled": True,
+                    "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+                    "view_counts_everywhere_api_enabled": True, "longform_notetweets_consumption_enabled": True,
+                    "responsive_web_twitter_article_tweet_consumption_enabled": True,
+                    "tweet_awards_web_tipping_enabled": True,
+                    "creator_subscriptions_quote_tweet_preview_enabled": True,
+                    "freedom_of_speech_not_reach_fetch_enabled": True, "standardized_nudges_misinfo": True,
+                    "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+                    "rweb_video_timestamps_enabled": True, "longform_notetweets_rich_text_read_enabled": True,
+                    "longform_notetweets_inline_media_enabled": True,
+                    "profile_label_improvements_pcf_label_in_post_enabled": True,
+                    "rweb_tipjar_consumption_enabled": True, "responsive_web_graphql_exclude_directive_enabled": True,
+                    "verified_phone_label_enabled": True,
+                    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": True,
+                    "responsive_web_graphql_timeline_navigation_enabled": True,
+                    "responsive_web_enhance_cards_enabled": True}
+
+        if cursor:
+            variables['cursor'] = cursor
+
+        params = {'variables': utils.json_stringify(variables), 'features': utils.json_stringify(features)}
+        return "GET", self.URL_GROK_CONVERSATION_BY_ID, params
+
+    def get_grok_new_response(self, conversation_id, previous_and_current_response, grok_model="grok-2a"):
+        json_data = {"responses": previous_and_current_response, "systemPromptName": "",
+                     "grokModelOptionId": grok_model, "conversationId": conversation_id, "returnSearchResults": True,
+                     "returnCitations": True, "promptMetadata": {"promptSource": "NATURAL", "action": "INPUT"},
+                     "imageGenerationCount": 4, "requestFeatures": {"eagerTweets": True, "serverHistory": True}}
+
+        return "POST", self.URL_NEW_GROK_RESPONSE, None, json_data
+
+    def get_suggested_users(self):
+        variables = {"count": 20, "context": "{}"}
+        features = {"profile_label_improvements_pcf_label_in_post_enabled": True,
+                    "rweb_tipjar_consumption_enabled": True, "responsive_web_graphql_exclude_directive_enabled": True,
+                    "verified_phone_label_enabled": True, "creator_subscriptions_tweet_preview_api_enabled": True,
+                    "responsive_web_graphql_timeline_navigation_enabled": True,
+                    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": True,
+                    "premium_content_api_read_enabled": True,
+                    "communities_web_enable_tweet_community_results_fetch": True,
+                    "c9s_tweet_anatomy_moderator_badge_enabled": True,
+                    "responsive_web_grok_analyze_button_fetch_trends_enabled": True,
+                    "responsive_web_grok_analyze_post_followups_enabled": True, "articles_preview_enabled": True,
+                    "responsive_web_edit_tweet_api_enabled": True,
+                    "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+                    "view_counts_everywhere_api_enabled": True, "longform_notetweets_consumption_enabled": True,
+                    "responsive_web_twitter_article_tweet_consumption_enabled": True,
+                    "tweet_awards_web_tipping_enabled": True, "creator_subscriptions_quote_tweet_preview_enabled": True,
+                    "freedom_of_speech_not_reach_fetch_enabled": True, "standardized_nudges_misinfo": True,
+                    "tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled": True,
+                    "rweb_video_timestamps_enabled": True, "longform_notetweets_rich_text_read_enabled": True,
+                    "longform_notetweets_inline_media_enabled": True, "responsive_web_enhance_cards_enabled": True}
+
+        params = {'variables': utils.json_stringify(variables), 'features': utils.json_stringify(features)}
+        return "GET", self.URL_SUGGESTED_USERS, params
 
 
 class FlowData:

@@ -3,6 +3,7 @@ import os
 import time
 from http.cookiejar import MozillaCookieJar
 from httpx._content import encode_multipart_data
+from io import BytesIO
 from .. import constants
 from . import Gif
 from ..utils import calculate_md5, get_random_string, check_if_file_is_supported
@@ -10,42 +11,35 @@ from ..exceptions import *
 
 
 class Proxy:
+    PROTOCOLS = {
+        constants.PROXY_TYPE_HTTP: "http://",
+        constants.PROXY_TYPE_SOCKS4: "socks4://",
+        constants.PROXY_TYPE_SOCKS5: "socks5://",
+    }
+
     def __init__(self, host: str, port: int, proxy_type: int, username: str = None, password: str = None):
         self.host = host
         self.password = password
         self.proxy_type = proxy_type
         self.username = username
         self.port = port
-        self.proxy = self.__parse__()
-
-    def __iter__(self):
-        for k, v in self.proxy.items():
-            yield k, v
 
     def __proxy_url__(self):
+        if self.proxy_type not in list(self.PROTOCOLS.keys()):
+            raise ProxyParseError()
+
         if self.username and self.password:
-            return "{}:{}@{}:{}".format(
+            this_url = "{}:{}@{}:{}".format(
                 self.username, self.password, self.host, self.port
             )
         else:
-            return "{}:{}".format(self.host, self.port)
+            this_url = "{}:{}".format(self.host, self.port)
 
-    def __parse__(self):
-        proxy_url = self.__proxy_url__()
-        if self.proxy_type == constants.HTTP:
-            http_url = "http://{}".format(proxy_url)
-            return dict.fromkeys(['http://', 'https://'], http_url)
-        elif self.proxy_type == constants.SOCKS4:
-            socks_url = "socks4://{}".format(proxy_url)
-            return dict.fromkeys(['http://', 'https://'], socks_url)
-        elif self.proxy_type == constants.SOCKS5:
-            socks_url = "socks5://{}".format(proxy_url)
-            return dict.fromkeys(['http://', 'https://'], socks_url)
+        return "{}{}".format(self.PROTOCOLS[self.proxy_type], this_url)
 
-        raise ProxyParseError()
+    def __str__(self):
+        return self.__proxy_url__()
 
-    def get_dict(self):
-        return self.proxy
 
 
 class GenericError:
@@ -180,8 +174,21 @@ class UploadedMedia:
         return f"{media_for}_{media_type}" if "gif" not in self.mime_type else f"{media_for}_gif"
 
     def _get_size(self):
-        if not self._source_url:
+        if isinstance(self._file, str):
+            if not self._source_url:
+                return os.path.getsize(self._file)
+            else:
+                self._file = self._source_url
+                return 0
+        if not self._source_url and isinstance(self._file, str):
             return os.path.getsize(self._file)
+        elif isinstance(self._file, bytes):
+            return len(self._file)
+        elif isinstance(self._file, BytesIO):
+            self._file = self._file.getvalue()
+            return len(self._file)
+        elif isinstance(self._file, Gif):
+            self._file = self._source_url
         return 0
 
     def get_mime_type(self):
@@ -196,7 +203,8 @@ class UploadedMedia:
         media_id = response.get('media_id_string')
 
         if not media_id:
-            raise ValueError(f"Unable to Initiate the Media Upload: {response}")
+            error = response["error"] if response.get("error") else response
+            raise ValueError(f"Unable to Initiate the Media Upload: {error}")
 
         return media_id
 
@@ -209,16 +217,24 @@ class UploadedMedia:
         return {"content-length": str(content_length), "content-type": content_type}
 
     async def _append_upload(self, media_id):
-        with open(self._file, "rb") as f:
-            segments, remainder = divmod(self.size, self.FILE_CHUNK_SIZE)
-            segments += bool(remainder)
+        segments, remainder = divmod(self.size, self.FILE_CHUNK_SIZE)
+        segments += bool(remainder)
 
-            for segment_index in range(segments):
-                boundary = self._create_boundary()
-                _, multipart = encode_multipart_data({}, {"media": ('blob', f.read(self.FILE_CHUNK_SIZE), "application/octet-stream")}, boundary)
-                headers = self.get_multipart_headers(multipart)
-                headers.update({"x-media-type": self.mime_type})
-                await self._client.http.upload_media_append(media_id, b"".join([i for i in multipart.iter_chunks()]), headers, segment_index)
+        if isinstance(self._file, bytes):
+            data_bytes = self._file
+        else:
+            with open(self._file, "rb") as f:
+                data_bytes = f.read()
+
+        for segment_index in range(segments):
+            start = segment_index * self.FILE_CHUNK_SIZE
+            end = start + self.FILE_CHUNK_SIZE
+            this_chunk = data_bytes[start:end]
+            boundary = self._create_boundary()
+            _, multipart = encode_multipart_data({}, {"media": ('blob', this_chunk, "application/octet-stream")}, boundary)
+            headers = self.get_multipart_headers(multipart)
+            headers.update({"x-media-type": self.mime_type})
+            await self._client.http.upload_media_append(media_id, b"".join([i for i in multipart.iter_chunks()]), headers, segment_index)
 
     async def set_metadata(self):
         await self._client.http.set_media_set_metadata(self.media_id, self._alt_text, self._sensitive_media_warning)
@@ -228,6 +244,12 @@ class UploadedMedia:
             response = await self._client.http.upload_media_finalize(media_id, self.md5_hash)
         else:
             response = {"processing_info": {"state": "pending", "check_after_secs": 1}}
+
+        if response.get("error"):
+            raise UploadFailed(
+                message=response.get("error", "Unknown Error Occurred while uploading File"),
+                response=response
+            )
 
         if not response.get('processing_info'):
             return
@@ -251,6 +273,9 @@ class UploadedMedia:
                 return
 
     async def upload(self):
+        if self.size == 0 and self._source_url is None:
+            raise UploadFailed(message="Looks like the file is not valid")
+
         self.media_id = await self._initiate_upload()
 
         if not self._source_url:
@@ -262,6 +287,11 @@ class UploadedMedia:
             await self.set_metadata()
 
         return self
+
+    def __repr__(self):
+        return "UploadedMedia(media_id={}, uploaded={}, mime_type={}, size={})".format(
+            self.media_id, True if self.media_id else False, self.mime_type, self.size
+        )
 
 
 
