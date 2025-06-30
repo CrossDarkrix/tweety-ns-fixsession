@@ -9,11 +9,12 @@ INBOX_PAGE_TYPES = (INBOX_PAGE_TYPE_TRUSTED, INBOX_PAGE_TYPE_UNTRUSTED)
 MEDIA_TYPE_VIDEO = "video"
 MEDIA_TYPE_GIF = "animated_gif"
 MEDIA_TYPE_IMAGE = MEDIA_TYPE_PHOTO = "photo"
-REQUEST_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-REQUEST_USER_AGENT_CH = '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"'
+REQUEST_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
+REQUEST_USER_AGENT_CH = '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"'
 REQUEST_PLATFORMS = ['Linux']
 DEFAULT_BEARER_TOKEN = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
 AUTH_ACTION_REQUIRED_KEYS = ("LoginTwoFactorAuthChallenge", "LoginAcid", "LoginEnterAlternateIdentifierSubtask")
+LIKES_ARE_PRIVATE_NOW_WARNING = "User Likes are now private , you can only see the Likes of authenticated User"
 
 LOGIN_SITE_KEY = "2F4F0B28-BC94-4271-8AD7-A51662E3C91C"
 GENERAL_SITE_KEY = "0152B4EB-D2DC-460A-89A1-629838B529C9"

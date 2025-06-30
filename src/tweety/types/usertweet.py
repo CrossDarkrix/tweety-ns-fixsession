@@ -1,3 +1,5 @@
+import traceback
+
 from .twDataTypes import SelfThread, ConversationThread, Tweet, Excel, ScheduledTweet
 from ..exceptions import UserProtected, UserNotFound
 from .base import BaseGeneratorClass, find_objects
@@ -242,6 +244,7 @@ class UserMedia(BaseGeneratorClass):
                 if parsed:
                     _tweets.append(parsed)
             except:
+                traceback.print_exc()
                 pass
 
         cursor = self._get_cursor_(response)
@@ -301,6 +304,7 @@ class SelfTimeline(BaseGeneratorClass):
 class TweetComments(BaseGeneratorClass):
     OBJECTS_TYPES = {
         "conversationthread": ConversationThread,
+        "tweet": Tweet,
     }
     _RESULT_ATTR = "tweets"
 
@@ -313,9 +317,10 @@ class TweetComments(BaseGeneratorClass):
         self.client = client
         self.tweet_id = tweet_id
         self.pages = pages
-        self.filter=filter_
+        self.filter= filter_
         self.wait_time = wait_time
         self.parent = None
+        self.ignore_empty_list = False
 
     def _get_target_object(self, tweet):
         entry_type = str(tweet['entryId']).split("-")[0]
@@ -325,10 +330,13 @@ class TweetComments(BaseGeneratorClass):
         return self.tweet_id if isinstance(self.tweet_id, Tweet) else await self.client.tweet_detail(self.tweet_id)
 
     async def get_page(self, cursor):
+        _comments = []
         if not self.parent:
             self.parent = await self._get_parent()
-        _comments = []
-        response = await self.client.http.get_tweet_detail(self.tweet_id, cursor, self.filter)
+        if self.get_hidden:
+            response = await self.client.http.get_hidden_comments(self.tweet_id, cursor)
+        else:
+            response = await self.client.http.get_tweet_detail(self.tweet_id, cursor, self.filter)
 
         entries = self._get_entries(response)
 
@@ -338,8 +346,12 @@ class TweetComments(BaseGeneratorClass):
             try:
                 if object_type is None:
                     continue
+                if "Tweet" in str(object_type):
+                    entry = [entry]
+                    object_type = ConversationThread
+                else:
+                    entry = [i for i in entry.get('content', {}).get('items', [])]
 
-                entry = [i for i in entry['content']['items']]
 
                 if len(entry) > 0:
                     parsed = object_type(self.client, self.parent, entry)
@@ -349,11 +361,14 @@ class TweetComments(BaseGeneratorClass):
 
         cursor = self._get_cursor_(response)
         cursor_top = self._get_cursor_(response, "Top")
+        cursor_spam = self._get_cursor_(response, "ShowMoreThreadsPrompt") or self._get_cursor_(response, "ShowMoreThreads")
+        if cursor_spam:
+            cursor = cursor_spam
 
         return _comments, cursor, cursor_top
 
     def __repr__(self):
-        return "TweetComments(tweet_id={}, count={}, filter={} parent={})".format(
+        return "TweetComments(tweet_id={}, count={}, filter={}, parent={})".format(
             self.tweet_id, len(self.tweets), self.filter, self.parent
         )
 

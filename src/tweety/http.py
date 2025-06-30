@@ -3,7 +3,9 @@ import inspect
 import os
 import random
 import re
+import time
 import traceback
+import uuid
 import warnings
 from typing import Callable
 from urllib.parse import quote, urlparse
@@ -12,7 +14,7 @@ import httpx
 from .exceptions import GuestTokenNotFound, TwitterError, UserNotFound, InvalidCredentials
 from .types import User
 from .types.n_types import GenericError
-from .utils import custom_json, GUEST_TOKEN_REGEX, get_random_string, MIGRATION_REGEX
+from .utils import custom_json, GUEST_TOKEN_REGEX, get_random_string, MIGRATION_REGEX, Warn
 from .builder import UrlBuilder
 from .transaction import TransactionGenerator
 from . import constants
@@ -50,6 +52,7 @@ class Request:
         self._builder = UrlBuilder()
         self._transaction = None
         self._guest_token = None
+        self._periscope_cookie = None
 
     @property
     def session(self):
@@ -95,7 +98,8 @@ class Request:
             'x-csrf-token': self._get_csrf(),
             'x-twitter-active-user': 'yes',
             'x-twitter-client-language': 'en',
-            'priority': 'u=1, i'
+            'priority': 'u=1, i',
+            'x-client-uuid': str(uuid.uuid4())
         }
 
         session_headers = self._session.headers
@@ -324,6 +328,36 @@ class Request:
         self.set_user(user)
         return user
 
+    async def authenticate_periscope(self):
+        request = self._builder.authenticate_periscope()
+        response = await self.__get_response__(**request)
+        return response
+
+    async def get_login_token_periscope(self, jwt):
+        request = self._builder.get_login_token_periscope(jwt)
+        request["headers"].update({
+            'x-attempt': '1',
+            'x-idempotence': str(int(time.time() * 1000)),
+            'x-periscope-user-agent': 'Twitter/m5'
+        })
+        response = await self.__get_response__(**request)
+        return response
+
+    async def get_periscope_cookie(self):
+        periscope_jwt_res = await self.authenticate_periscope()
+        periscope_jwt = periscope_jwt_res.get("data", {}).get("authenticate_periscope")
+
+        if not periscope_jwt:
+            raise TwitterError(500, "PeriScopeTokenFetchFailed", periscope_jwt_res, f"Unable to Get Periscope JWT Token: {periscope_jwt_res}")
+
+        periscope_cookie_res = await self.get_login_token_periscope(periscope_jwt)
+        periscope_cookie = periscope_cookie_res.get("cookie")
+        if not periscope_cookie:
+            raise TwitterError(500, "PeriScopeCookieFetchFailed", periscope_cookie_res,
+                               f"Unable to Get Periscope Cookie: {periscope_cookie_res}")
+
+        return periscope_cookie
+
     async def get_user_state(self):
         request = self._builder.get_user_state()
         response = await self.__get_response__(**request)
@@ -401,6 +435,11 @@ class Request:
             response = await self.__get_response__(**self._builder.tweet_detail(tweetId, cursor, filter_))
         else:
             response = await self.__get_response__(**self._builder.tweet_detail_as_guest(tweetId))
+        return response
+
+    async def get_hidden_comments(self, tweet_id, cursor=None):
+        request_data = self._builder.get_hidden_comments(tweet_id, cursor)
+        response = await self.__get_response__(**request_data)
         return response
 
     async def get_tweet_analytics(self, tweet_id):
@@ -513,7 +552,7 @@ class Request:
             pool = response.get('card_uri')
 
         if len(text) > 280:
-            request_data = self._builder.create_note_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo, community_id, post_on_timeline)
+            request_data = self._builder.create_note_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo, batch_composed, community_id, post_on_timeline)
         else:
             request_data = self._builder.create_tweet(text, files, filter_, reply_to, quote_tweet_url, pool, geo, batch_composed, community_id, post_on_timeline)
         response = await self.__get_response__(**request_data)
@@ -572,8 +611,12 @@ class Request:
         response = await self.__get_response__(**request_data)
         return response
 
+    @Warn("`get_audio_stream` is depreciated and will be removed in next releases, use `get_stream` instead")
     async def get_audio_stream(self, media_key):
-        request_data = self._builder.get_audio_stream(media_key)
+        return await self.get_stream(media_key)
+
+    async def get_stream(self, media_key):
+        request_data = self._builder.get_stream(media_key)
         response = await self.__get_response__(**request_data)
         return response
 
@@ -616,6 +659,12 @@ class Request:
         request_data = self._builder.get_community_members(community_id, filter_, cursor)
         response = await self.__get_response__(**request_data)
         return response
+
+    async def get_notifications(self, cursor):
+        request_data = self._builder.get_notifications(cursor)
+        response = await self.__get_response__(**request_data)
+        return response
+
 
     async def get_tweet_notifications(self, cursor):
         request_data = self._builder.get_new_user_tweet_notification(cursor)
@@ -793,6 +842,31 @@ class Request:
         request_data = self._builder.get_friendship(source_user_id, target_user_id)
         response = await self.__get_response__(**request_data)
         return response
+
+    async def get_suggested_audio_spaces(self, languages):
+        if not self._periscope_cookie:
+            self._periscope_cookie = await self.get_periscope_cookie()
+
+        request_data = self._builder.get_suggested_audio_space(self._periscope_cookie, languages)
+        request_data["headers"].update({
+            "authorization": None,
+            "cookie": None
+        })
+        response = await self.__get_response__(**request_data)
+        return response
+
+    async def update_profile_image(self, media_id):
+        request_data = self._builder.update_profile_image(media_id)
+        request_data['headers']['content-type'] = f"application/x-www-form-urlencoded"
+        response = await self.__get_response__(**request_data)
+        return response
+
+    async def update_profile_banner(self, media_id):
+        request_data = self._builder.update_profile_banner(media_id)
+        request_data['headers']['content-type'] = f"application/x-www-form-urlencoded"
+        response = await self.__get_response__(**request_data)
+        return response
+
 
     async def download_media(self, media_url, filename: str = None, progress_callback: Callable[[str, int, int], None] = None):
         filename = os.path.basename(media_url).split("?")[0] if not filename else filename
