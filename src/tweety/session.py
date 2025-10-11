@@ -69,7 +69,7 @@ class FileSession(Session):
     @staticmethod
     def _get_session_file_path(session_path, session_name):
         _session = session_name.replace(".tw_session", "")
-        directory = os.path.join(os.getenv('HOME'), 'Documents')
+        directory = os.path.dirname(session_path) or os.getcwd()
         return os.path.abspath(os.path.join(directory, f"{_session}.tw_session"))
 
     async def save_session(self, cookies, user):
